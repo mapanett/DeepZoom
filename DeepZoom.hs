@@ -60,13 +60,19 @@ tilePathName :: String -> Int -> Tile -> String
 tilePathName baseDir level tile = joinPath [baseDir, show level, tileFileName tile]
 
 -- doSliceImage :: tileSize overlap image baseDir level
--- doSliceImage _ _ _ -1 = ()
--- doSliceImage tileSize overlap image baseDir level = do
---   imageDimensions <- getDimension image
---   let tiles = calcTiles 256 4 (fromIntegral (width imageDimensions)) (fromIntegral (height imageDimensions))
+--doSliceImage _ _ _ _ 1 = 
+
+sliceReduce :: Int -> Int -> String -> IO Magick.HImage -> t -> IO Magick.HImage
+sliceReduce tileSize overlap baseDir ioImage level = do
+  image <- ioImage
+  imageDimensions <- getDimension image
+  let tiles = calcTiles tileSize overlap imageDimensions
+  let level = maxLevel imageDimensions
+  (putStrLn . show) $ map (tilePathName baseDir level) tiles
+  return (scaleImage 50 50 image)
 
 
-sliceImage :: FilePath -> IO ()
+--sliceImage :: FilePath -> IO ()
 sliceImage imagePath = do
   initializeMagick
   image <- readImage imagePath
@@ -75,5 +81,7 @@ sliceImage imagePath = do
 
   let baseDir = joinPath [takeDirectory imagePath, takeBaseName imagePath ++ "_files"]
   (putStrLn . show . fromIntegral)  levels
-  let tiles = calcTiles 256 4 imageDimensions
-  (putStrLn . show) $ map (tilePathName baseDir 0) tiles
+  --let tiles = calcTiles 256 4 imageDimensions
+  --(putStrLn . show) $ map (tilePathName baseDir 0) tiles
+  sliceReduce 254 4 baseDir image levels
+  (putStrLn . show . fromIntegral)  levels
