@@ -8,17 +8,26 @@ import Foreign.ForeignPtr (withForeignPtr)
 import Data.Int
 import Data.Word
 import Data.List
+import Data.Foldable (foldlM)
 import System.FilePath
-
+import System.Directory
 
 data Tile = Tile { col :: Int, row :: Int, rect :: Magick.Rectangle } deriving (Show)
 
 -- | Borrowed from snap-photogallery
 data Dimension = Dimension { width :: Int, height :: Int } deriving (Show)
 
+makeDimension :: Integral a => a -> a -> Dimension
+makeDimension width height = Dimension (fromIntegral width) (fromIntegral height)
+
 -- | Returns the maximum size between the width and the edeg
 getMax :: Dimension -> Int
 getMax (Dimension x y) = max x y
+
+reduce :: Dimension -> Dimension
+reduce (Dimension width height) = 
+  makeDimension (halfOrOne width) (halfOrOne height)
+  where halfOrOne x = max 1 (ceiling ((fromIntegral x) / 2))
 
 maxLevel :: Integral b => Dimension -> b
 maxLevel dimension = ceiling (logBase 2 (fromIntegral (getMax dimension)))
@@ -28,6 +37,10 @@ getDimension himg =
   withForeignPtr (Magick.getImage himg) $ \p -> do
     img <- peek p
     return $ Dimension (fromIntegral (Magick.columns img)) (fromIntegral (Magick.rows img))
+
+scaleImageToDimension :: Dimension -> Magick.HImage -> Magick.HImage
+scaleImageToDimension(Dimension width height) image = 
+  scaleImage (fromIntegral width) (fromIntegral height) image
 
 tileOffset :: Integral a => a -> a -> a -> a
 tileOffset tileSize overlap position
@@ -44,7 +57,7 @@ makeRectangle width height x y =
   Magick.Rectangle (fromIntegral width) (fromIntegral height)
                    (fromIntegral x) (fromIntegral y)
 
--- calcTiles :: Int -> Int -> Int -> Dimension -> [Tile]
+calcTiles :: Int -> Int -> Dimension -> [Tile]
 calcTiles tileSize overlap (Dimension width height) = 
   [(Tile x y (makeRectangle (dimensionFor x) (dimensionFor y) 
                             (offsetFor x) (offsetFor y))) | x <- [0..cols], y <- [0..rows]]
@@ -59,29 +72,43 @@ tileFileName tile = (intercalate "_" $ map show [(col tile), (row tile)]) ++ ".j
 tilePathName :: String -> Int -> Tile -> String
 tilePathName baseDir level tile = joinPath [baseDir, show level, tileFileName tile]
 
--- doSliceImage :: tileSize overlap image baseDir level
---doSliceImage _ _ _ _ 1 = 
+sliceTile :: String -> Int -> Magick.HImage -> Tile -> IO ()
+sliceTile baseDir level image tile = 
+  writeImage (tilePathName baseDir level tile) (cropImage (rect tile) image)
 
-sliceReduce :: Int -> Int -> String -> IO Magick.HImage -> t -> IO Magick.HImage
-sliceReduce tileSize overlap baseDir ioImage level = do
-  image <- ioImage
+sliceReduce :: Int -> Int -> String -> Magick.HImage -> Int -> IO Magick.HImage
+sliceReduce tileSize overlap baseDir image level = do
   imageDimensions <- getDimension image
-  let tiles = calcTiles tileSize overlap imageDimensions
-  let level = maxLevel imageDimensions
-  (putStrLn . show) $ map (tilePathName baseDir level) tiles
-  return (scaleImage 50 50 image)
+  mapM_ (sliceTile baseDir level image) (calcTiles tileSize overlap imageDimensions)
+  return $ scaleImageToDimension (reduce imageDimensions) image
 
+appendPath :: FilePath -> FilePath -> FilePath
+appendPath path newPart = joinPath (path : newPart : [])
 
---sliceImage :: FilePath -> IO ()
+deepZoomPath :: FilePath -> FilePath
+deepZoomPath imagePath = joinPath [takeDirectory imagePath, takeBaseName imagePath ++ "_files"]
+
+deepZoomXML :: Int -> Int -> Dimension -> String
+deepZoomXML tileSize overlap (Dimension width height) = 
+  "<?xml version='1.0' encoding='UTF-8'?>" ++
+  "<Image TileSize='" ++ (show tileSize) ++ "' Overlap='" ++ (show overlap)  ++ "' " ++ 
+  "Format='jpg' xmlns='http://schemas.microsoft.com/deepzoom/2008'>" ++ 
+  "<Size Width='" ++ (show width) ++ "' Height='" ++ (show height) ++ "'/></Image>"
+
+writeDeepZoomXML :: Int -> Int -> Dimension -> FilePath -> IO ()
+writeDeepZoomXML tileSize overlap dimensions imagePath = 
+  writeFile (joinPath [deepZoomPath imagePath, takeBaseName imagePath ++ ".xml"]) 
+    (deepZoomXML tileSize overlap dimensions)
+
+sliceImage :: FilePath -> IO ()
 sliceImage imagePath = do
   initializeMagick
   image <- readImage imagePath
   imageDimensions <- getDimension image
   let levels = maxLevel imageDimensions
+  let baseDir = deepZoomPath imagePath
 
-  let baseDir = joinPath [takeDirectory imagePath, takeBaseName imagePath ++ "_files"]
-  (putStrLn . show . fromIntegral)  levels
-  --let tiles = calcTiles 256 4 imageDimensions
-  --(putStrLn . show) $ map (tilePathName baseDir 0) tiles
-  sliceReduce 254 4 baseDir image levels
-  (putStrLn . show . fromIntegral)  levels
+  mapM_ ((createDirectoryIfMissing True) . (appendPath baseDir) . show) [0..levels]
+  foldlM (sliceReduce 256 4 baseDir) image [levels, (levels-1)..0]
+  writeDeepZoomXML 256 4 imageDimensions imagePath
+
