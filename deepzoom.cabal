@@ -3,7 +3,7 @@ Version:             0.1
 Description:         A DeepZoom image slicer
 License:             BSD3
 License-file:        LICENSE
-copyright:           (c) Tim Chevalier, 2008
+copyright:           (c) Matthew Panetta, 2012 
 stability:           alpha
 Author:              Matthew Panetta
 Maintainer:          matthew@panetta.id.au
@@ -11,6 +11,6 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  Build-Depends:     base >= 3 && < 5, hsmagick, filepath
+  Build-Depends:     base >= 3 && < 5, hsmagick, filepath, directory
   Exposed-modules:   Graphics.Transform.DeepZoom.Slice
   ghc-options:       -Wall
