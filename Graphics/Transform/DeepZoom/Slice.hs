@@ -1,4 +1,4 @@
-module DeepZoom
+module Graphics.Transform.DeepZoom.Slice
 ( sliceImage ) where
 
 import Graphics.Transform.Magick.Images
@@ -97,7 +97,7 @@ deepZoomXML tileSize overlap (Dimension width height) =
 
 writeDeepZoomXML :: Int -> Int -> Dimension -> FilePath -> IO ()
 writeDeepZoomXML tileSize overlap dimensions imagePath = 
-  writeFile (joinPath [deepZoomPath imagePath, takeBaseName imagePath ++ ".xml"]) 
+  writeFile (joinPath [takeDirectory imagePath, takeBaseName imagePath ++ ".xml"]) 
     (deepZoomXML tileSize overlap dimensions)
 
 sliceImage :: FilePath -> IO ()
