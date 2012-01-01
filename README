@@ -1,0 +1,17 @@
+= A Haskell DeepZoom Image Slicer.
+
+This library slices images so that they can be used with the Deep Zoom (http://www.microsoft.com/silverlight/deep-zoom/).
+It's based on deep_zoom_slicer by Sascha Hanssen (hanssen@meso.net, http://github.com/hanssen/deep_zoom_slicer)
+
+== Usage
+
+import import Graphics.Transform.DeepZoom.Slice
+
+main = do
+  sliceImage "bigImage.jpg"
+
+==  Additional Information
+
+Currently this only works on 32bit Linux.
+
+
